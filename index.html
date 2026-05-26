@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2026卒社員に徹底アンケート！就活のリアルと決断の理由</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const assignRanks = (data) => {
+      let rank = 1;
+      return data.map((item, i) => {
+        if (i > 0 && item.value < data[i - 1].value) {
+          rank = i + 1;
+        }
+        return { ...item, rank };
+      });
+    };
+
+    // 高さを自動で揃えるための共通見出しコンポーネント
+    const BoxHeader = ({ title, subtitle, large = false }) => (
+      <div className={`mb-6 flex flex-col justify-end ${large ? 'min-h-[5rem]' : 'min-h-[4rem]'}`}>
+        <h3 className={`${large ? 'text-xl md:text-2xl' : 'text-lg'} font-black text-gray-900 text-center leading-snug`}>
+          {title}
+        </h3>
+        {subtitle && (
+          <div className={`font-bold text-gray-500 mt-2 text-center ${large ? 'text-sm' : 'text-xs'}`}>{subtitle}</div>
+        )}
+      </div>
+    );
+
+    const RankingBar = ({ label, value, max, rank, small = false }) => {
+      const colors = [
+        'bg-pink-400', 'bg-orange-400', 'bg-yellow-400', 
+        'bg-green-400', 'bg-teal-400', 'bg-blue-400', 'bg-indigo-400', 'bg-purple-400'
+      ];
+      const barColor = colors[(rank - 1) % colors.length];
+      const textSize = small ? 'text-xs md:text-sm' : 'text-sm md:text-base';
+      const numSize = small ? 'text-sm md:text-base' : 'text-base md:text-lg';
+      const badgeSize = small ? 'w-5 h-5 text-xs' : 'w-7 h-7 text-sm';
+      const height = small ? 'h-3' : 'h-4';
+      
+      return (
+        <div className={`mb-3 group ${small ? 'mb-2' : 'mb-4'}`}>
+          <div className="flex justify-between items-end mb-1">
+            <div className="flex items-center gap-2 pr-2">
+              {rank <= 3 ? (
+                <span className={`flex items-center justify-center ${badgeSize} rounded-full font-black shadow-sm transform -rotate-6 shrink-0
+                  ${rank === 1 ? 'bg-yellow-300 text-yellow-900' : rank === 2 ? 'bg-gray-200 text-gray-700' : 'bg-orange-300 text-orange-900'}`}>
+                  {rank}
+                </span>
+              ) : (
+                <span className={`${badgeSize} flex items-center justify-center text-gray-400 font-bold bg-gray-100 rounded-full shrink-0`}>{rank}</span>
+              )}
+              <span className={`${textSize} font-bold text-gray-700 leading-snug break-normal`}>{label}</span>
+            </div>
+            <span className={`${numSize} font-black text-gray-700 shrink-0`}>{value}<span className="text-[10px] md:text-xs font-bold text-gray-500 ml-1">人</span></span>
+          </div>
+          <div className={`w-full bg-gray-100 rounded-full ${height} shadow-inner overflow-hidden border-2 border-gray-100 relative`}>
+            <div 
+              className={`${barColor} h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden`} 
+              style={{ width: `${(value / max) * 100}%` }}
+            >
+              <div className="absolute top-0 left-0 w-full h-1/3 bg-white opacity-20"></div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const RatioBar = ({ leftLabel, leftValue, rightLabel, rightValue, colorLeft, colorRight, iconLeft, iconRight }) => {
+      const total = leftValue + rightValue;
+      const leftPercent = (leftValue / total) * 100;
+      
+      return (
+        <div className="mb-8">
+          <div className="flex justify-between items-end mb-2 px-1">
+            <span className={`font-black text-sm md:text-base flex items-center gap-1 ${colorLeft.text}`}>
+              <span className="text-xl">{iconLeft}</span> {leftLabel} <span className="text-lg md:text-xl ml-1">{leftValue}</span>人
+            </span>
+            <span className={`font-black text-sm md:text-base flex items-center gap-1 ${colorRight.text}`}>
+              <span className="text-lg md:text-xl mr-1">{rightValue}</span>人 {rightLabel} <span className="text-xl">{iconRight}</span>
+            </span>
+          </div>
+          <div className="h-6 md:h-8 flex rounded-full overflow-hidden border-4 border-white shadow-[0_0_0_2px_#f3f4f6]">
+            <div className={`${colorLeft.bg} flex items-center justify-start px-3 text-white font-bold text-xs transition-all duration-1000 whitespace-nowrap`} style={{ width: `${leftPercent}%` }}>{Math.round(leftPercent)}%</div>
+            <div className={`${colorRight.bg} flex items-center justify-end px-3 text-white font-bold text-xs transition-all duration-1000 whitespace-nowrap`} style={{ width: `${100 - leftPercent}%` }}>{Math.round(100 - leftPercent)}%</div>
+          </div>
+        </div>
+      );
+    }
+
+    const Accordion = ({ title, comments, index }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const colors = ['border-pink-300', 'border-blue-300', 'border-yellow-300', 'border-green-300'];
+      const bgColors = ['bg-pink-50', 'bg-blue-50', 'bg-yellow-50', 'bg-green-50'];
+      const shadowColors = ['shadow-[4px_4px_0_#f9a8d4]', 'shadow-[4px_4px_0_#93c5fd]', 'shadow-[4px_4px_0_#fde047]', 'shadow-[4px_4px_0_#86efac]'];
+      
+      const borderColor = colors[index % colors.length];
+      const bgColor = bgColors[index % bgColors.length];
+      const shadowColor = shadowColors[index % shadowColors.length];
+
+      return (
+        <div className={`mb-6 bg-white rounded-3xl border-4 ${borderColor} ${shadowColor} overflow-hidden transition-all duration-300`}>
+          <button 
+            className="w-full text-left p-4 md:p-6 flex justify-between items-center focus:outline-none hover:bg-gray-50"
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            <div className="flex items-start gap-3 pr-4">
+              <span className="text-2xl animate-bounce shrink-0">💬</span>
+              <h3 className="font-bold text-base md:text-xl text-gray-800 leading-snug">
+                {title}
+              </h3>
+            </div>
+            <div className={`transform transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
+              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold border-2 border-gray-200 shrink-0">
+                ↓
+              </div>
+            </div>
+          </button>
+          <div className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[10000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div className={`p-4 md:p-6 pt-0 space-y-3 md:space-y-4 ${bgColor} border-t-4 ${borderColor}`}>
+              <div className="pt-4 space-y-4">
+                {comments.map((comment, i) => (
+                  <div key={i} className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border-2 border-white relative">
+                    <span className="absolute top-2 left-2 text-3xl text-gray-200 font-serif leading-none">"</span>
+                    <p className="px-6 md:px-8 text-sm md:text-base text-gray-700 leading-relaxed font-medium break-normal">
+                      {comment}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    function App() {
+      // 全項目を43人（重複分除外）に合わせて調整＆テキストをエクセル原文通りに統一
+      const rankings = {
+        mbti: assignRanks([
+          { label: 'INFP（仲介者）', value: 8 }, { label: 'ENFP（運動家）', value: 7 },
+          { label: 'ESFP（エンターテイナー）', value: 6 }, { label: 'ESFJ（領事）', value: 6 },
+          { label: 'INFJ（提唱者）', value: 4 }, { label: 'ENFJ（主人公）', value: 3 },
+          { label: 'INTJ（建築家）', value: 2 }, { label: 'ISFJ（擁護者）', value: 2 },
+          { label: '実施したが忘れた', value: 2 }, { label: 'ESTP（起業家）', value: 1 },
+          { label: 'ISFP（冒険家）', value: 1 }, { label: 'ENTP（討論者）', value: 1 }
+        ]),
+        job: assignRanks([
+          { label: '飲食・カフェ系（居酒屋・カフェ・ファミレスなど）', value: 28 }, 
+          { label: '販売・小売系（アパレル・コンビニ・スーパー・家電など）', value: 12 },
+          { label: 'イベント・サービス系（イベントスタッフ・ホテル・結婚式場・テーマパーク）', value: 8 }, 
+          { label: 'その他（自由記入）', value: 5 },
+          { label: '教育・講師系（塾講師・家庭教師など）', value: 3 }, 
+          { label: '事務・作業・配送系（データ入力・軽作業・デリバリーなど）', value: 3 }
+        ]),
+        industry_all: assignRanks([
+          { label: '卸売・小売', value: 26 }, { label: 'サービス', value: 15 },
+          { label: 'IT・通信', value: 13 }, { label: '不動産', value: 10 },
+          { label: '商社', value: 8 }, { label: '決めていなかった', value: 8 },
+          { label: '広告・出版・マスコミ', value: 5 }, { label: '飲食', value: 4 },
+          { label: '金融・保険', value: 4 }, { label: '医療・福祉', value: 3 },
+          { label: '教育', value: 3 }, { label: 'メーカー', value: 3 },
+          { label: '農林・水産', value: 2 }, { label: '交通インフラ', value: 2 },
+          { label: '官公庁・公社・団体', value: 2 }, { label: 'コンサル', value: 1 },
+          { label: '電気・ガス', value: 1 }, { label: '建設', value: 1 },
+          { label: 'その他（自由記入）', value: 1 }
+        ]),
+        industry_target: assignRanks([
+          { label: '決めていなかった', value: 13 }, { label: '卸売・小売', value: 11 },
+          { label: 'IT・通信', value: 6 }, { label: 'サービス', value: 3 },
+          { label: '広告・出版・マスコミ', value: 2 }, { label: '医療・福祉', value: 2 },
+          { label: '金融・保険', value: 2 }, { label: '商社', value: 1 },
+          { label: '不動産', value: 1 }, { label: '教育', value: 1 },
+          { label: 'その他（自由記入）', value: 1 }
+        ]),
+        axis: assignRanks([
+          { label: '社風・人間関係が良い（心理的安全性）', value: 30 }, 
+          { label: 'お客様と直接関われる・感謝される（ありがとうの数）', value: 14 },
+          { label: '研修・教育制度が充実している', value: 13 }, 
+          { label: 'ワークライフバランス（休日・残業の少なさ）', value: 9 },
+          { label: '頑張りが正当に評価される（インセンティブ・昇格）', value: 9 }, 
+          { label: '自分の強みを活かせる', value: 7 },
+          { label: '若手から活躍できる・裁量権がある', value: 6 }, 
+          { label: '福利厚生の充実', value: 6 },
+          { label: '風通しが良い・意見が言いやすい', value: 6 }, 
+          { label: 'チームワーク・一体感がある', value: 6 },
+          { label: '誰とするか（社員の人柄）', value: 5 }, 
+          { label: '企業・業界の安定性（上場グループなど）', value: 4 },
+          { label: '明確な目標を持って働ける', value: 4 }, 
+          { label: '地域や人の役に立つ（社会貢献・インフラ）', value: 1 },
+          { label: '給与・年収の高さ', value: 1 }
+        ]),
+        media_all: assignRanks([
+          { label: 'マイナビ', value: 35 }, { label: 'リクナビ', value: 16 },
+          { label: 'キャリタス就活', value: 13 }, { label: '学校の就活サイト', value: 9 },
+          { label: 'その他（自由記入）', value: 8 }, { label: 'OpenWork', value: 6 },
+          { label: 'ONE CARRER', value: 5 }, { label: 'OfferBox', value: 3 },
+          { label: 'あさがくナビ', value: 3 }, { label: '楽天みん就', value: 2 },
+          { label: '就活会議', value: 1 }, { label: 'しずおか仕事図鑑', value: 1 }
+        ]),
+        media_most: assignRanks([
+          { label: 'マイナビ', value: 30 }, { label: 'その他（自由記入）', value: 8 },
+          { label: 'キャリタス就活', value: 2 }, { label: '学校の就活サイト', value: 2 },
+          { label: 'ONE CARRER', value: 1 }
+        ]),
+        sns_all: assignRanks([
+          { label: 'LINE', value: 22 }, { label: 'SNSを活用していない', value: 16 },
+          { label: 'YouTube', value: 13 }, { label: 'Instagram', value: 10 },
+          { label: 'TikTok', value: 4 }, { label: 'X（旧 Twitter）', value: 2 }
+        ]),
+        sns_most: assignRanks([
+          { label: 'SNSを活用していない', value: 15 }, { label: 'LINE', value: 12 },
+          { label: 'Instagram', value: 10 }, { label: 'YouTube', value: 3 },
+          { label: 'X（旧 Twitter）', value: 2 }, { label: 'TikTok', value: 1 }
+        ]),
+        struggle: assignRanks([
+          { label: '自分の強み（自己PR）を見つけるのが難しかった', value: 19 }, 
+          { label: '「やりたいこと」や「就活の軸」がなかなか定まらなかった', value: 18 },
+          { label: '面接で緊張してしまい、うまく話せなかった', value: 16 }, 
+          { label: '情報が多すぎて、何を信じればいいか分からなくなった', value: 9 },
+          { label: '自己分析に終わりが見えず、迷走した', value: 6 }, 
+          { label: 'SPIやWebテストの対策', value: 6 },
+          { label: '学業・アルバイトと就活の両立（スケジュール管理）', value: 5 }, 
+          { label: '周りの友人の内定報告やSNSを見て焦ってしまった', value: 5 },
+          { label: '「お祈りメール」が続いてメンタルが落ち込んだ', value: 5 }, 
+          { label: 'ES（エントリーシート）の作成に時間がかかりすぎた', value: 5 },
+          { label: '特になし', value: 3 }, 
+          { label: '企業研究が浅く、志望動機がうまく作れなかった', value: 3 }
+        ]),
+        waste: assignRanks([
+          { label: '特になし', value: 17 }, 
+          { label: '興味のない企業の「とりあえずエントリー」や説明会', value: 12 },
+          { label: 'ネットの口コミ（掲示板・SNS）を検索して一喜一憂する時間', value: 9 }, 
+          { label: 'ESや面接のために「自分を良く見せよう」と飾った時間', value: 3 },
+          { label: 'SPIやWebテストの対策', value: 1 }, 
+          { label: '移動時間・交通費（対面選考のコスト）', value: 1 }
+        ]),
+        regret: assignRanks([
+          { label: 'もっと早くから「準備（自己分析・ガクチカ整理）」を始めるべきだった', value: 27 }, 
+          { label: '「面接練習」が不足していて、本番で緊張しすぎた', value: 16 },
+          { label: 'ネットの口コミや「ホワイト/ブラック」の噂を気にしすぎた', value: 7 }, 
+          { label: '「食わず嫌い」せず、もっと幅広い業界を見ればよかった', value: 7 },
+          { label: '大手や知名度だけで企業を選んでしまい、遠回りした', value: 6 }, 
+          { label: '特になし', value: 4 },
+          { label: '生成AIやマニュアルに頼りすぎて、「自分の言葉」で話せなかった', value: 3 }, 
+          { label: 'その他（自由記入）', value: 1 }
+        ]),
+        trigger: assignRanks([
+          { label: '合同企業説明会（マイナビEXPO・キャリタスなど）', value: 24 }, 
+          { label: '人材紹介', value: 8 },
+          { label: 'その他（自由記入）', value: 3 }, 
+          { label: '就職情報サイト（マイナビ・あさがくナビなど）', value: 3 },
+          { label: '学内合同企業説明会', value: 2 }, 
+          { label: 'SNS（Instagram・note・Xなど）', value: 1 },
+          { label: '知人・先輩・家族の紹介', value: 1 }, 
+          { label: 'スカウト・オファー型サイト', value: 1 }
+        ]),
+        kyun: assignRanks([
+          { label: '最終選考の担当（社長・役員）の話に熱量を感じた時', value: 17 }, 
+          { label: 'リクルーターが自分の悩みに本気で向き合ってくれた時', value: 13 },
+          { label: '内定者懇親会で同期と盛り上がった時', value: 5 }, 
+          { label: 'LINEの返信が丁寧だった、早かった時', value: 4 },
+          { label: '合説で熱烈に声をかけられた時', value: 2 }, 
+          { label: 'その他（自由記入）', value: 2 }
+        ]),
+        reason: assignRanks([
+          { label: '社員の人柄・社風（一緒に働く人）', value: 33 }, 
+          { label: '若手からの成長環境・裁量権', value: 4 },
+          { label: '事業の安定性・将来性（ソフトバンク一次代理店）', value: 3 }, 
+          { label: '会社としてのビジョン・考え方', value: 1 },
+          { label: 'その他（自由記入）', value: 1 }, 
+          { label: '給与・インセンティブ制度', value: 1 }
+        ])
+      };
+
+      const freeComments = {
+        struggle: [
+          '諦めないで就活を続けていれば、いつかは自分にとって良い企業に出会うことができるから焦らないで欲しいと自分に言い聞かせました。',
+          'メンタル面で崩れないように、適度にリフレッシュする時間を意図的に作って乗り切りました。',
+          '無理をしないで自分のペースで進めることを意識し、周りと比較しないように心がけました。',
+          '気分転換で遊ぶ時間を作って、気持ちを切り替えるようにしていました。',
+          '家族や友人に話を聞いてもらい、ひとりで抱え込まないようにしました。',
+          '一度就活から完全に離れる日を作り、好きなことだけをしてリセットしました。',
+          '「今の苦労は将来笑い話になる」と信じて、目の前のことに集中するようにしました。',
+          '内定をもらった先輩からアドバイスをもらい、自分のやり方が間違っていないか確認しました。',
+          '美味しいものを食べて、とりあえず寝る！寝たら少しポジティブになれました。',
+          '自分を否定されたわけではなく、企業とのマッチングの問題だと割り切るようにしました。',
+          'マイナス思考になったときは、自己分析をやり直して自分の強みを再確認しました。',
+          '趣味の時間を削りすぎず、ストレス発散できる環境を整えて乗り切りました。',
+          '同じように就活で悩んでいる友人と励まし合い、一人じゃないと実感できたのが良かったです。',
+          '大学のキャリアセンターに通い、プロに客観的な意見をもらうことで不安を取り除きました。',
+          '「絶対に納得のいく形で終わらせる」という悔しさをバネにして頑張りました。'
+        ],
+        words: [
+          '「無理をしないで自分のペースで仕事を学んで成長出来るようにしたい」と言っていただき、自分の力を信じてあげて欲しいという言葉に救われました。',
+          'リクルーターの方が自分の悩みに本気で向き合ってくれた時、この会社なら信頼できると確信しました。',
+          '最終選考の担当（社長・役員）の話に熱量を感じた時です。',
+          '自ら挑戦し続ける人材になりたいと、ここで強く思えた瞬間でした。',
+          '面接で自分の弱みを正直に話したとき、「それも個性だから一緒に伸ばしていこう」と受け入れてもらえた瞬間。',
+          '社員の方々が仕事に対して誇りを持っている姿を見て、私もこんな風に働きたいと強く思いました。',
+          '「他の会社も見てもいいけど、最後はうちに来てほしい」とストレートに言われたこと。',
+          '質問に対して、良い面だけでなく厳しい面も包み隠さず話してくれた誠実さに惹かれました。',
+          '内定者懇親会で同期となる仲間と話したとき、直感で「ここなら楽しく働けそう！」と思えたこと。',
+          '面接というより、私という人間を深く知ろうとする「対話」をしてくれたのが印象的でした。',
+          '会社のビジョンや将来の展望を聞いて、純粋にワクワクしたのが決定的な瞬間です。',
+          'いつも丁寧で早い連絡をいただき、学生一人ひとりを大切にしていることが伝わってきました。',
+          '「君の〇〇な強みは、うちの会社で絶対に活きる」と具体的に評価してもらえたことです。',
+          '合同説明会で、どの企業よりも明るく、楽しそうに話す社員の姿に一目惚れしました。',
+          '「入社後も全力でサポートするから安心して飛び込んできて」という言葉が、一番の安心材料になりました。'
+        ]
+      };
+
+      return (
+        <div className="min-h-screen bg-[#fafafa] bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] font-sans text-gray-800 break-keep">
+          
+          {/* Header */}
+          <header className="bg-white/90 backdrop-blur-sm shadow-sm sticky top-0 z-50 border-b-2 border-gray-100">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+              <div className="font-black text-xl md:text-2xl tracking-tighter flex items-center gap-2">
+                <span className="text-gray-900">SKI</span>
+                <span className="text-gray-800">RECRUITMENT</span>
+              </div>
+            </div>
+          </header>
+
+          {/* Hero Section */}
+          <section className="py-12 md:py-20 px-4 text-center relative overflow-hidden">
+            <div className="absolute top-5 left-5 md:top-10 md:left-10 text-3xl md:text-4xl animate-pulse">✨</div>
+            <div className="absolute bottom-5 right-5 md:bottom-10 md:right-10 text-3xl md:text-4xl animate-bounce">🚀</div>
+            <div className="max-w-3xl mx-auto relative z-10">
+              <span className="inline-block bg-blue-500 text-white font-bold tracking-widest text-xs md:text-base mb-4 px-6 py-2 rounded-full shadow-[4px_4px_0_#1e3a8a] transform -rotate-2">
+                2026卒社員に徹底アンケート！
+              </span>
+              <h1 className="text-4xl md:text-6xl font-black text-gray-900 leading-tight mb-6 break-keep drop-shadow-sm">
+                就活のリアルと<br />決断の理由
+              </h1>
+              <p className="text-gray-700 font-medium text-sm md:text-lg leading-relaxed max-w-2xl mx-auto break-keep bg-white p-4 rounded-2xl shadow-sm border-2 border-gray-100">
+                2026年卒内定者のリアルな声を集めました。<br />
+                プロフィールから就活の軸、苦労したこと、エスケーアイに決めた理由まで、気になる全20項目を一挙大公開！
+              </p>
+            </div>
+          </section>
+
+          <main className="max-w-4xl mx-auto px-4 sm:px-6 pb-20 space-y-16">
+
+            {/* =========================================
+                CHAPTER 1: プロフィール大解剖
+            ========================================= */}
+            <section className="relative">
+              <div className="sticky top-16 z-40 bg-[#fafafa]/90 backdrop-blur-md py-4 mb-6 border-b-4 border-pink-400">
+                <h2 className="text-2xl md:text-3xl font-black text-gray-900 flex items-center gap-3">
+                  <span className="text-3xl">🧑‍🎓</span> Chapter 1. 新入社員プロフィール
+                </h2>
+              </div>
+              
+              <div className="bg-white p-6 md:p-8 rounded-[2rem] border-4 border-pink-200 shadow-[6px_6px_0_#fbcfe8] mb-8">
+                <BoxHeader title="新入社員はどんな人たち？" large />
+                
+                <RatioBar 
+                  leftLabel="文系" leftValue={33} rightLabel="理系" rightValue={10} 
+                  iconLeft="📚" iconRight="🧪"
+                  colorLeft={{bg: 'bg-pink-400', text: 'text-pink-600'}} colorRight={{bg: 'bg-blue-400', text: 'text-blue-600'}} 
+                />
+                <RatioBar 
+                  leftLabel="インドア" leftValue={26} rightLabel="アウトドア" rightValue={17} 
+                  iconLeft="🏠" iconRight="🏕️"
+                  colorLeft={{bg: 'bg-purple-400', text: 'text-purple-600'}} colorRight={{bg: 'bg-orange-400', text: 'text-orange-600'}} 
+                />
+                <RatioBar 
+                  leftLabel="落ち着いている性格" leftValue={24} rightLabel="明るく元気な性格" rightValue={19} 
+                  iconLeft="🍵" iconRight="🏃‍♂️"
+                  colorLeft={{bg: 'bg-teal-400', text: 'text-teal-600'}} colorRight={{bg: 'bg-yellow-400', text: 'text-yellow-600'}} 
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-white p-6 rounded-[2rem] border-4 border-pink-100 shadow-[6px_6px_0_#fbcfe8] flex flex-col">
+                  <BoxHeader title="16Personalities" />
+                  <div className="flex-grow">
+                    {rankings.mbti.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] border-4 border-pink-100 shadow-[6px_6px_0_#fbcfe8] flex flex-col">
+                  <BoxHeader title="学生時代のアルバイト" />
+                  <div className="flex-grow">
+                    {rankings.job.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* =========================================
+                CHAPTER 2: 業界・軸・ツール
+            ========================================= */}
+            <section className="relative pt-8">
+              <div className="sticky top-16 z-40 bg-[#fafafa]/90 backdrop-blur-md py-4 mb-6 border-b-4 border-blue-400">
+                <h2 className="text-2xl md:text-3xl font-black text-gray-900 flex items-center gap-3">
+                  <span className="text-3xl">🏢</span> Chapter 2. 業界選びと活用ツール
+                </h2>
+              </div>
+
+              {/* 業界比較 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-blue-200 shadow-[6px_6px_0_#bfdbfe] flex flex-col">
+                  <BoxHeader title="どんな業種（業界）を見ていましたか？" subtitle="（複数選択可）" />
+                  <div className="flex-grow">
+                    {rankings.industry_all.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+                <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-indigo-200 shadow-[6px_6px_0_#c7d2fe] flex flex-col">
+                  <BoxHeader title="そのうち志望業種（業界）はどれでしたか？" subtitle="（単一選択）" />
+                  <div className="flex-grow">
+                    {rankings.industry_target.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+              </div>
+
+              {/* 就活の軸 */}
+              <div className="bg-white p-6 md:p-10 rounded-[2rem] border-4 border-cyan-200 shadow-[6px_6px_0_#a5f3fc] mb-8">
+                <BoxHeader title="企業選びの「就活の軸」は？" subtitle="（最大3つ選択）" large />
+                <div className="max-w-2xl mx-auto">
+                  {rankings.axis.map((item, i) => <RankingBar key={i} {...item} max={43} />)}
+                </div>
+              </div>
+
+              {/* 生成AI円グラフ */}
+              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-8 md:p-12 rounded-[2rem] shadow-[6px_6px_0_#1e3a8a] border-4 border-indigo-300 text-white text-center relative overflow-hidden mb-8">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2"></div>
+                <h3 className="text-xl md:text-2xl font-black mb-8 drop-shadow-md">ES作成や自己分析での「生成AI」利用率</h3>
+                <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+                  <div className="relative w-48 h-48 bg-white/10 rounded-full p-4 backdrop-blur-sm border-2 border-white/20">
+                    <svg viewBox="0 0 36 36" className="w-full h-full drop-shadow-md">
+                      <path className="text-indigo-900/40" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      <path className="text-yellow-300" strokeDasharray={`${(24 / 43) * 100}, 100`} strokeWidth="4" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-4xl font-black text-white drop-shadow-md">56%</span>
+                    </div>
+                  </div>
+                  <div className="text-left space-y-5 bg-white/10 p-6 rounded-2xl border-2 border-white/20 backdrop-blur-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="w-6 h-6 rounded-full bg-yellow-300 shadow-sm border-2 border-yellow-100 flex items-center justify-center text-yellow-900 font-bold text-xs">✓</div>
+                      <span className="text-lg md:text-xl font-bold">使った：24人</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-6 h-6 rounded-full bg-indigo-900/40 border-2 border-indigo-300 shadow-sm"></div>
+                      <span className="text-lg md:text-xl font-bold">使わなかった：19人</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 媒体・SNS比較 (Z型レイアウト) */}
+              <div className="space-y-8">
+                {/* 上段：採用サイト */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+                  <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-blue-100 shadow-[6px_6px_0_#bfdbfe] flex flex-col">
+                    <BoxHeader title="活用していた媒体・採用サイトは？" subtitle="（複数選択可）" />
+                    <div className="flex-grow">
+                      {rankings.media_all.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                    </div>
+                  </div>
+                  <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-blue-200 shadow-[6px_6px_0_#bfdbfe] bg-blue-50/30 flex flex-col">
+                    <BoxHeader title="最も活用していた媒体・採用サイトは？" subtitle="（単一選択）" />
+                    <div className="flex-grow">
+                      {rankings.media_most.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 下段：SNS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+                  <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-green-100 shadow-[6px_6px_0_#bbf7d0] flex flex-col">
+                    <BoxHeader title="就活中に活用していたSNSは？" subtitle="（複数回答可）" />
+                    <div className="flex-grow">
+                      {rankings.sns_all.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                    </div>
+                  </div>
+                  <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-green-200 shadow-[6px_6px_0_#bbf7d0] bg-green-50/30 flex flex-col">
+                    <BoxHeader title="その中で最も活用していたSNSは？" subtitle="（単一選択）" />
+                    <div className="flex-grow">
+                      {rankings.sns_most.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* =========================================
+                CHAPTER 3: 苦悩・後悔・タイパ
+            ========================================= */}
+            <section className="relative pt-8">
+              <div className="sticky top-16 z-40 bg-[#fafafa]/90 backdrop-blur-md py-4 mb-6 border-b-4 border-purple-400">
+                <h2 className="text-2xl md:text-3xl font-black text-gray-900 flex items-center gap-3">
+                  <span className="text-3xl">💦</span> Chapter 3. 就活の苦悩と後悔
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-purple-200 shadow-[6px_6px_0_#e9d5ff] flex flex-col">
+                  <BoxHeader title="就活中に苦労したことは何でしたか？" subtitle="（最大3つ選択）" />
+                  <div className="flex-grow">
+                    {rankings.struggle.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+                <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-gray-300 shadow-[6px_6px_0_#d1d5db] bg-gray-50 flex flex-col">
+                  <BoxHeader title="「これだけは無駄だった」と思う時間は？" subtitle="（単一選択）" />
+                  <div className="flex-grow">
+                    {rankings.waste.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 md:p-10 rounded-[2rem] border-4 border-red-200 shadow-[6px_6px_0_#fecaca] mb-8">
+                <BoxHeader title="就活で後悔したことは何でしたか？" subtitle="（複数回答可）" large />
+                <div className="max-w-2xl mx-auto">
+                  {rankings.regret.map((item, i) => <RankingBar key={i} {...item} max={43} />)}
+                </div>
+              </div>
+
+              {/* 「就活をやめたい」円グラフ */}
+              <div className="bg-gradient-to-br from-purple-500 to-fuchsia-600 p-8 md:p-12 rounded-[2rem] shadow-[6px_6px_0_#4c1d95] border-4 border-fuchsia-300 text-white text-center relative overflow-hidden mb-8">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2"></div>
+                <h3 className="text-xl md:text-2xl font-black mb-8 drop-shadow-md">「就活をやめたい」と思った瞬間はありましたか？</h3>
+                <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+                  <div className="relative w-48 h-48 bg-white/10 rounded-full p-4 backdrop-blur-sm border-2 border-white/20">
+                    <svg viewBox="0 0 36 36" className="w-full h-full drop-shadow-md">
+                      <path className="text-fuchsia-900/40" strokeWidth="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      <path className="text-yellow-300" strokeDasharray={`${(25 / 43) * 100}, 100`} strokeWidth="4" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-4xl font-black text-white drop-shadow-md">58%</span>
+                    </div>
+                  </div>
+                  <div className="text-left space-y-5 bg-white/10 p-6 rounded-2xl border-2 border-white/20 backdrop-blur-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="w-6 h-6 rounded-full bg-yellow-300 shadow-sm border-2 border-yellow-100 flex items-center justify-center text-yellow-900 font-bold text-xs">✓</div>
+                      <span className="text-lg md:text-xl font-bold">あった…：25人</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-6 h-6 rounded-full bg-fuchsia-900/40 border-2 border-fuchsia-300 shadow-sm"></div>
+                      <span className="text-lg md:text-xl font-bold">なかった！：18人</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Accordion title="Q. 「就活をやめたい」と思った瞬間、どう乗り越えましたか？" comments={freeComments.struggle} index={0} />
+            </section>
+
+            {/* =========================================
+                CHAPTER 4: エスケーアイへの決断
+            ========================================= */}
+            <section className="relative pt-8">
+              <div className="sticky top-16 z-40 bg-[#fafafa]/90 backdrop-blur-md py-4 mb-6 border-b-4 border-yellow-400">
+                <h2 className="text-2xl md:text-3xl font-black text-gray-900 flex items-center gap-3">
+                  <span className="text-3xl">🤝</span> Chapter 4. エスケーアイへの決断
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-green-200 shadow-[6px_6px_0_#bbf7d0] flex flex-col">
+                  <BoxHeader title="エスケーアイを知ったきっかけは？" subtitle="（単一選択）" />
+                  <div className="flex-grow">
+                    {rankings.trigger.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+                <div className="h-full bg-white p-6 rounded-[2rem] border-4 border-pink-300 shadow-[6px_6px_0_#f9a8d4] bg-pink-50/50 flex flex-col">
+                  <BoxHeader title="選考中に「一番キュンとした」瞬間は？" subtitle="（単一選択）" />
+                  <div className="flex-grow">
+                    {rankings.kyun.map((item, i) => <RankingBar key={i} {...item} max={43} small />)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 md:p-10 rounded-[2rem] border-4 border-yellow-300 shadow-[6px_6px_0_#fef08a] mb-8">
+                <BoxHeader title="最終的に入社を決断した「一番の理由」は？" subtitle="（単一選択）" large />
+                <div className="max-w-2xl mx-auto">
+                  {rankings.reason.map((item, i) => <RankingBar key={i} {...item} max={43} />)}
+                </div>
+              </div>
+
+              <Accordion title="Q. 入社を決意した「決定的な瞬間」や「忘れられない言葉」は？" comments={freeComments.words} index={2} />
+            </section>
+
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-gray-900 text-gray-400 py-16 mt-10 rounded-t-[3rem] border-t-8 border-gray-800">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center space-y-8">
+              <div className="bg-gray-800 p-6 md:p-10 rounded-[2rem] border-4 border-gray-700 shadow-[6px_6px_0_#374151] text-sm md:text-base text-gray-300 text-left w-full leading-relaxed">
+                <p className="font-black text-white mb-3 flex items-center justify-center md:justify-start gap-2 text-lg">
+                  <span className="text-2xl">⚠️</span>
+                  取り扱いに関するお願い
+                </p>
+                <p className="font-medium break-normal">
+                  ※本ページに掲載されているテキスト、画像、データなどの無断転載・複製・二次利用を固く禁じます。悪用が発覚した場合は法的措置をとる場合がございますので、あらかじめご了承ください。
+                </p>
+              </div>
+              <div className="pt-8">
+                <p className="font-bold tracking-widest">&copy; 2026 SKI Inc.</p>
+              </div>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
